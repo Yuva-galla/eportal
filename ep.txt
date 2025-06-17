@@ -574,6 +574,495 @@ public class UserResponseDTO {
 }
 
 
+Question Bank Module
+package com.example.demo.Controller;
+
+import com.example.demo.DTO.*;
+import com.example.demo.Mapper.*;
+
+import java.util.List;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.example.demo.Entity.QuestionBank;
+import com.example.demo.Exception.EmptyFileException;
+import com.example.demo.Service.QuestionBankService;
+
+
+@RestController
+@RequestMapping("/qb")
+public class QuestionBankController {
+	
+	@Autowired
+	private QuestionBankService qbService;
+	
+	/**
+	 * Adding a single question to the database
+	 * @param dto
+	 * @return ResponseEntity
+	 */
+	@PostMapping("/addQuestion")
+	public ResponseEntity<QuestionDTO> addQuestion(@RequestBody QuestionDTO dto) {
+		QuestionBank saved=QuestionMapper.toEntity(dto);
+		qbService.addQues(saved);
+		return ResponseEntity.ok(dto);
+	}
+	/**
+	 * Adding multiple questions to the database
+	 * @param dtos
+	 * @return ResponseEntity<List<QuestionDTO>>
+	 */
+	@PostMapping("/addMultipleQuestions")
+	public ResponseEntity<List<QuestionDTO>> addMultipleQuestions(@RequestBody List<QuestionDTO> dtos) {
+		List<QuestionBank> questions = dtos.stream()
+			.map(QuestionMapper::toEntity)   //It is method reference
+											 // map(dto->QuestionMapper.toEntity(dto)) 
+			.toList();
+		qbService.addMulQues(questions);
+		return ResponseEntity.ok(questions.stream().map(QuestionMapper::toDTO).toList());
+	}
+	/**
+	 * Adding questions from the file
+	 * @param file
+	 * @return ResponseEntity<String>
+	 */
+@PostMapping("/uploadFile")
+public ResponseEntity<String> uploadFile(@RequestParam("file") MultipartFile file) {
+	if (file.isEmpty()) {
+		throw new EmptyFileException("Uploaded file is empty. Please select a valid file.");
+		}
+	try {
+		qbService.saveQuestionsFromFile(file);	
+		return ResponseEntity.ok("File uploaded and data saved successfully.");
+	} catch (Exception e) {
+		return ResponseEntity.badRequest().body("Error processing file: " + e.getMessage());
+	}
+}
+
+	
+/**
+ * Retrieving the question with the id
+ * @param id
+ * @return ResponseEntity<QuestionDTO>
+ */
+	@GetMapping("/getquestion/{id}")
+	public ResponseEntity<QuestionDTO> getQuestionById(@PathVariable int id) {
+		return qbService.getById(id)
+			.map(QuestionMapper::toDTO) //object->QuestionMapper.toDTO(object)
+			.map(ResponseEntity::ok)    //dto->ResponseEntity.ok(dto)
+			.orElse(ResponseEntity.notFound().build());
+}
+	
+	//
+	/**
+	 * Retrieving all the questions
+	 * @return List<QuestionDTO>
+	 */
+	@GetMapping("/getAll")
+	public List<QuestionDTO> getAllQuestions() {
+		return qbService.getAll().stream()
+		.map(QuestionMapper::toDTO)
+		.toList();
+}
+	
+	 
+	/**
+	 * For student to attempt all questions
+	 * @return List<QuestionAttemptDTO>
+	 */
+	@GetMapping("/attemptQuestions")
+	public List<QuestionAttemptDTO> getQuestionsForAttempt() {
+		return qbService.getAll().stream()
+			.map(QuestionMapper::toAttemptDTO)
+			.toList();
+}
+
+	/**
+	 * For updating a question
+	 * @param id
+	 * @param dto
+	 * @return ResponseEntity<QuestionDTO>
+	 */
+	
+	@PutMapping("/updQuestion/{id}")
+	public ResponseEntity<QuestionDTO> updateQuestion(@PathVariable int id, @RequestBody QuestionDTO dto) {
+		return qbService.update(id, QuestionMapper.toEntity(dto))
+		.map(QuestionMapper::toDTO) 
+		.map(ResponseEntity::ok)
+		.orElse(ResponseEntity.notFound().build());
+}
+
+	
+	/**
+	 * Deleting a question with id
+	 * @param id
+	 * @return ResponseEntity<String>
+	 */
+	@DeleteMapping("/delQuestion/{id}")
+	public ResponseEntity<String> deleteQuestion(@PathVariable int id)
+	{
+		qbService.delete(id);
+		return ResponseEntity.ok("Deleted the question with id "+id);
+	}
+	/**
+	 * Retrieving questions based on category
+	 * @param category
+	 * @return List<QuestionDTO>
+	 */
+	@GetMapping("/getByCategory/{category}")
+	public List<QuestionDTO> getByCategory(@PathVariable String category) {
+		return qbService.getQuestionByCategory(category).stream()
+				.map(QuestionMapper::toDTO)
+				.toList();
+}
+	/**
+	 * //Retrieving Questions based on difficulty
+	 * @param difficulty
+	 * @return List<QuestionDTO>
+	 */
+	@GetMapping("/getByDifficulty/{difficulty}")
+	public List<QuestionDTO> getByDifficulty(@PathVariable String difficulty) {
+		return qbService.getQuestionByDifficulty(difficulty).stream()
+		.map(QuestionMapper::toDTO)
+		.toList();
+}
+
+
+}
+
+
+package com.example.demo.DTO;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class QuestionAttemptDTO {
+	private int questionId;	
+	private String text;
+	private String category;
+	private String difficulty;
+	private String option1;
+	private String option2;
+}
+
+
+package com.example.demo.DTO;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class QuestionDTO {
+	private int questionId;
+	private String text;
+	private String category;
+	private String difficulty;
+	private String option1;
+	private String option2;
+	private String correctAnswer;
+}
+
+package com.example.demo.Entity;
+
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+
+@Data
+@Entity
+@Table(name="Question")
+public class QuestionBank {
+	@Id
+	@GeneratedValue(strategy=GenerationType.IDENTITY)
+	private int questionId;
+	@Column(unique=true,nullable=false)
+	private String text;
+	@NotBlank(message = "Category cannot be blank")
+	private String category;
+	@NotBlank(message = "Difficulty cannot be blank")
+	private String difficulty;
+	@NotBlank(message = "Option1 cannot be blank")
+	@Pattern(regexp = "^[a-zA-Z0-9 ]+$", message = "Option1 must not contain special characters")
+	private String option1;
+	@NotBlank(message = "Option2 cannot be blank")
+	@Pattern(regexp = "^[a-zA-Z0-9 ]+$", message = "Option2 must not contain special characters")
+	private String option2;
+	private String correctAnswer;
+	
+	public QuestionBank() {
+		
+	}
+
+	public void setId(int id) {
+		// TODO Auto-generated method stub
+		questionId=id;
+		
+	}
+}
+
+package com.example.demo.Exception;
+
+
+public class EmptyFileException extends RuntimeException {
+	public EmptyFileException(String message) {
+		super(message);
+ }
+}
+
+
+package com.example.demo.Exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.HashMap;
+import java.util.Map;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+	
+    // Handle validation errors like @Pattern, @NotBlank, etc.
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
+        Map<String, String> errors = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(error ->
+            errors.put(error.getField(), error.getDefaultMessage())
+        );
+        return new ResponseEntity<>(errors, HttpStatus.BAD_REQUEST);
+    }
+
+    // Handle all other exceptions
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<Map<String, String>> handleGenericException(Exception ex) {
+        Map<String, String> error = new HashMap<>();
+        error.put("error", ex.getMessage());
+        return new ResponseEntity<>(error, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+   
+    @ExceptionHandler(EmptyFileException.class)
+    public ResponseEntity<Map<String, String>> handleEmptyFileException(EmptyFileException ex) {
+    	Map<String, String> error = new HashMap<>();
+    	error.put("error", ex.getMessage());
+    	return new ResponseEntity<>(error, HttpStatus.BAD_REQUEST);
+}
+
+
+
+
+}
+
+
+package com.example.demo.Mapper;
+
+import com.example.demo.DTO.QuestionDTO;
+import com.example.demo.DTO.QuestionAttemptDTO;
+import com.example.demo.Entity.QuestionBank;
+
+public class QuestionMapper {
+
+		public static QuestionDTO toDTO(QuestionBank qb) {
+			return new QuestionDTO(
+				qb.getQuestionId(),
+				qb.getText(),
+				qb.getCategory(),
+				qb.getDifficulty(),
+				qb.getOption1(),
+				qb.getOption2(),
+				qb.getCorrectAnswer()
+				);
+		}
+
+		public static QuestionAttemptDTO toAttemptDTO(QuestionBank qb) {
+			return new QuestionAttemptDTO(
+				qb.getQuestionId(),
+				qb.getText(),
+				qb.getCategory(),
+				qb.getDifficulty(),
+				qb.getOption1(),
+				qb.getOption2()
+				);
+		}
+
+		public static QuestionBank toEntity(QuestionDTO dto) {
+			QuestionBank qb = new QuestionBank();
+			qb.setQuestionId(dto.getQuestionId());
+			qb.setText(dto.getText());
+			qb.setCategory(dto.getCategory());
+			qb.setDifficulty(dto.getDifficulty());
+			qb.setOption1(dto.getOption1());
+			qb.setOption2(dto.getOption2());
+			qb.setCorrectAnswer(dto.getCorrectAnswer());
+			return qb;
+		}
+}
+
+package com.example.demo.Repository;
+
+import java.util.List;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import org.springframework.stereotype.Repository;
+
+import com.example.demo.Entity.QuestionBank;
+
+@Repository
+public interface QuestionBankRepo extends JpaRepository<QuestionBank,Integer>{
+	public List<QuestionBank> findByCategory(String category);
+	
+	public List<QuestionBank> findByDifficulty(String difficulty);
+}
+
+package com.example.demo.Service;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.util.List;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.example.demo.Repository.QuestionBankRepo;
+
+import com.example.demo.Entity.QuestionBank;
+import com.example.demo.Exception.EmptyFileException;
+
+
+@Service
+public class QuestionBankService {
+	
+	@Autowired
+	private QuestionBankRepo qbRepo;
+
+	public QuestionBank addQues(QuestionBank q)
+	{
+		return qbRepo.save(q);
+	}
+	
+	public void addMulQues(List<QuestionBank> question) {
+		for(QuestionBank qb:question)
+		{
+			qbRepo.save(qb);
+		}
+	}
+	
+	public void saveQuestionsFromFile(MultipartFile file) throws Exception {
+		BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()));
+		String line;
+		boolean skipHeader = true;
+		boolean hasData = false;
+		
+		while ((line = reader.readLine()) != null) {
+			if (skipHeader) {
+				skipHeader = false;
+				continue;
+			}
+			
+			String[] data = line.split(",");
+			
+			QuestionBank q = new QuestionBank();
+					q.setText(data[0]);
+					q.setCategory(data[1]);
+					q.setDifficulty(data[2]);
+					q.setOption1(data[3]);
+					q.setOption2(data[4]);
+					q.setCorrectAnswer(data[5]);
+					addQues(q);
+					hasData=true;
+			}
+		if(!hasData)
+		{
+			throw new EmptyFileException("The uploaded file contains only headers and no data rows.");
+		}
+	}
+
+	public List<QuestionBank> getAll()
+	{
+		return qbRepo.findAll();
+	}
+	
+	public Optional<QuestionBank> getById(int id)
+	{
+		return qbRepo.findById(id);
+	}
+	
+	public List<QuestionBank> getQuestionByCategory(String category)
+	{
+		return qbRepo.findByCategory(category);
+	}
+	
+	public List<QuestionBank> getQuestionByDifficulty(String difficulty)
+	{
+		return qbRepo.findByDifficulty(difficulty);
+	}
+	
+	public Optional<QuestionBank> update(int id,QuestionBank qb)
+	{
+		return qbRepo.findById(id).map(question->{
+			question.setText(qb.getText());
+			question.setCategory(qb.getCategory());
+			question.setDifficulty(qb.getDifficulty());
+			question.setOption1(qb.getOption1());
+			question.setOption2(qb.getOption2());
+			question.setCorrectAnswer(qb.getCorrectAnswer());
+			
+			return qbRepo.save(question);
+		});
+	}
+	
+	public void delete(int id)
+	{
+		if(qbRepo.existsById(id))
+		{
+			qbRepo.deleteById(id);	
+		}
+		else {
+			throw new NoSuchElementException("Question with ID "+ id+" not found");
+		}
+	}	
+}
+
+
+
+
+
+
+
+
+
+
 
 
 
